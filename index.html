@@ -1,0 +1,1106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Three.js Camera & Video App</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            font-family: Arial, sans-serif;
+            background: #000;
+        }
+        
+        #container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background: #1a1a1a;
+        }
+        
+        /* Canvas container - dynamically sized */
+        #canvas-container {
+            position: relative;
+        }
+        
+        #controls {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            z-index: 100;
+            display: flex;
+            flex-direction: column;
+            gap: 00px;
+            max-width: 100%;
+        }
+        
+        .control-group {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        
+        button {
+            padding: 10px 15px;
+            background: rgba(255, 255, 255, 0.9);
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: background 0.3s;
+            font-size: 14px;
+        }
+        
+        button:hover {
+            background: rgba(255, 255, 255, 1);
+        }
+        
+        button:disabled {
+            background: rgba(150, 150, 150, 0.5);
+            cursor: not-allowed;
+        }
+        
+        select {
+            padding: 8px 12px;
+            background: rgba(255, 255, 255, 0.9);
+            border: none;
+            border-radius: 5px;
+            font-weight: bold;
+            font-size: 14px;
+        }
+        
+        #status {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            color: white;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 10px;
+            border-radius: 5px;
+            z-index: 100;
+            max-width: 90%;
+        }
+        
+        #device-info {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            color: white;
+            background: rgba(0, 100, 255, 0.7);
+            padding: 10px;
+            border-radius: 5px;
+            z-index: 100;
+            font-size: 12px;
+        }
+        
+        #photo-preview, #video-preview {
+            position: absolute;
+            bottom: 10px;
+            right: 10px;
+            max-width: 250px;
+            max-height: 180px;
+            border: 2px solid white;
+            border-radius: 5px;
+            z-index: 100;
+            display: none;
+        }
+        
+        #recording-indicator, #countdown-overlay {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(255, 0, 0, 0.8);
+            color: white;
+            padding: 15px 25px;
+            border-radius: 10px;
+            font-size: 18px;
+            font-weight: bold;
+            z-index: 200;
+            display: none;
+            animation: pulse 1s infinite;
+        }
+        
+        #countdown-overlay {
+            background: rgba(0, 100, 255, 0.9);
+            font-size: 48px;
+            padding: 30px 40px;
+            animation: countdownPulse 1s ease-in-out;
+        }
+        
+        /* Hidden video element for camera */
+        #camera-video {
+            position: absolute;
+            visibility: hidden;
+            width: 1px;
+            height: 1px;
+        }
+        
+        /* Format selector for desktop */
+        #format-selector {
+            position: absolute;
+            bottom: 60px;
+            left: 20px;
+            z-index: 100;
+            display: none;
+        }
+        
+        .format-button {
+            margin-right: 1px;
+            padding: 2px 2px;
+            background: rgba(100, 100, 255, 0.8);
+            color: white;
+            border: 2px solid transparent;
+        }
+        
+        .format-button.active {
+            background: rgba(0, 255, 0, 0.8);
+            border-color: white;
+        }
+        
+        /* Mobile adjustments */
+        @media (max-width: 768px) {
+            button, select {
+                font-size: 12px;
+                padding: 2px 2px;
+            }
+            
+            #controls {
+                gap: 5px;
+            }
+            
+            .control-group {
+                gap: 5px;
+            }
+        }
+        
+        @keyframes pulse {
+            0% { opacity: 0.8; }
+            50% { opacity: 1; }
+            100% { opacity: 0.8; }
+        }
+        
+        @keyframes countdownPulse {
+            0% { transform: translate(-50%, -50%) scale(0.8); opacity: 0.5; }
+            50% { transform: translate(-50%, -50%) scale(1.2); opacity: 1; }
+            100% { transform: translate(-50%, -50%) scale(1); opacity: 1; }
+        }
+    </style>
+</head>
+<body>
+    <div id="container">
+        <div id="canvas-container"></div>
+        <!-- Hidden video element for camera -->
+        <video id="camera-video" autoplay playsinline></video>
+        
+        <div id="controls">
+            <div class="control-group">
+                <button id="startCamera">Start Camera</button>
+                <button id="stopCamera" disabled>Stop Camera</button>
+            </div>
+            <div class="control-group">
+                <select id="videoSelect">
+                    <option value="">Select WebM Video</option>
+                    <option value="video1">WebM Video 1</option>
+                    <option value="video2">WebM Video 2</option>
+                    <option value="video3">WebM Video 3</option>
+                </select>
+                <button id="playVideo" disabled>Play</button>
+                <button id="stopVideo" disabled>Stop</button>
+            </div>
+            <div class="control-group">
+                <select id="modelSelect">
+                    <option value="">Select 3D Model</option>
+                    <option value="model1">Animated Model 1</option>
+                    <option value="model2">Animated Model 2</option>
+                    <option value="model3">Animated Model 3</option>
+                </select>
+                <button id="loadModel" disabled>Load Model</button>
+                <button id="removeModel" disabled>Remove Model</button>
+            </div>
+            <div class="control-group">
+                <button id="takePhoto">Take Photo</button>
+                <button id="recordVideo">Record 10s Video</button>
+                <button id="stopRecording" disabled style="display: none;">Stop Recording</button>
+            </div>
+        </div>
+        
+        <div id="device-info"></div>
+        <div id="status">Ready to start</div>
+        
+        <div id="format-selector">
+            <button class="format-button" id="portrait-btn" data-format="portrait">Portrait (9:16)</button>
+            <button class="format-button" id="landscape-btn" data-format="landscape">Landscape (16:9)</button>
+            <button class="format-button" id="square-btn" data-format="square">Square (1:1)</button>
+        </div>
+        
+        <img id="photo-preview" alt="Photo preview">
+        <video id="video-preview" alt="Video preview" controls></video>
+        <div id="recording-indicator">🔴 RECORDING<br><span id="countdown">10</span>s</div>
+        <div id="countdown-overlay">3</div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+    <script>
+        // Device detection and format configuration
+        const deviceInfo = {
+            isMobile: false,
+            isTablet: false,
+            isDesktop: false,
+            os: '',
+            format: 'landscape' // default
+        };
+        
+        const formatConfigs = {
+            portrait: {
+                width: 1080,
+                height: 1920,
+                aspectRatio: 9/16,
+                planeWidth: 9,
+                planeHeight: 16,
+                cameraZ: 10,
+                videoPlaneWidth: 3,
+                videoPlaneHeight: 5.33,
+                videoPlaneX: 3,
+                modelX: -3,
+                modelY: -2,
+                modelScale: 1.5
+            },
+            landscape: {
+                width: 1920,
+                height: 1080,
+                aspectRatio: 16/9,
+                planeWidth: 32,
+                planeHeight: 9,
+                cameraZ: 5,
+                videoPlaneWidth: 4,
+                videoPlaneHeight: 3,
+                videoPlaneX: 2,
+                modelX: -2,
+                modelY: -1,
+                modelScale: 1
+            },
+            square: {
+                width: 1080,
+                height: 1080,
+                aspectRatio: 1,
+                planeWidth: 12,
+                planeHeight: 12,
+                cameraZ: 7,
+                videoPlaneWidth: 3.5,
+                videoPlaneHeight: 3.5,
+                videoPlaneX: 2.5,
+                modelX: -2.5,
+                modelY: -1.5,
+                modelScale: 1.2
+            }
+        };
+        
+        let currentFormat;
+        
+        // Three.js variables
+        let scene, camera, renderer, cameraTexture, videoTexture;
+        let cameraStream, videoElement;
+        let backgroundPlane, videoPlane;
+        let isVideoPlaying = false;
+        let cameraVideo;
+        
+        // 3D Model variables
+        let gltfLoader;
+        let currentModel = null;
+        let animationMixer = null;
+        let animationActions = [];
+        let clock;
+        
+        // Video recording variables
+        let mediaRecorder;
+        let recordedChunks = [];
+        let isRecording = false;
+        let recordingTimer;
+        let countdownTimer;
+        
+        // Countdown variables
+        let captureCountdownTimer;
+        let isCounting = false;
+        
+        // Sample GLB model URLs
+        const modelUrls = {
+            model1: 'https://threejs.org/examples/models/gltf/RobotExpressive/RobotExpressive.glb',
+            model2: 'https://threejs.org/examples/models/gltf/Flamingo.glb',
+            model3: 'https://threejs.org/examples/models/gltf/Parrot.glb'
+        };
+        const videoUrls = {
+            video1: 'https://res.cloudinary.com/dzq7c0mxt/video/upload/v1748091424/movie-webm_fipc3a.webm',
+            video2: 'https://test-videos.co.uk/vids/bigbuckbunny/webm/vp8/360/Big_Buck_Bunny_360_10s_1MB.webm',
+            video3: 'https://test-videos.co.uk/vids/sintel/webm/vp9/240/Sintel_240_10s_1MB.webm'
+        };
+        
+        function detectDevice() {
+            const userAgent = navigator.userAgent || navigator.vendor || window.opera;
+            
+            // Detect mobile devices
+            if (/android/i.test(userAgent)) {
+                deviceInfo.isMobile = true;
+                deviceInfo.os = 'Android';
+            } else if (/iPad|iPhone|iPod/.test(userAgent) && !window.MSStream) {
+                deviceInfo.isMobile = true;
+                deviceInfo.os = 'iOS';
+            } else if (/windows phone/i.test(userAgent)) {
+                deviceInfo.isMobile = true;
+                deviceInfo.os = 'Windows Phone';
+            }
+            
+            // Detect tablets
+            if (/tablet|ipad/i.test(userAgent) || (window.innerWidth >= 768 && window.innerWidth <= 1024)) {
+                deviceInfo.isTablet = true;
+                deviceInfo.isMobile = false;
+            }
+            
+            // Detect desktop
+            if (!deviceInfo.isMobile && !deviceInfo.isTablet) {
+                deviceInfo.isDesktop = true;
+                deviceInfo.os = 'Desktop';
+            }
+            
+            // Set default format based on device
+            if (deviceInfo.isMobile) {
+                deviceInfo.format = 'portrait'; // Instagram story format for mobile
+            } else if (deviceInfo.isTablet) {
+                deviceInfo.format = 'square'; // Square format for tablets
+            } else {
+                deviceInfo.format = 'landscape'; // Landscape for desktop
+                // Show format selector on desktop
+                document.getElementById('format-selector').style.display = 'block';
+            }
+            
+            // Update device info display
+            const infoDiv = document.getElementById('device-info');
+            infoDiv.innerHTML = `
+                Device: ${deviceInfo.os}<br>
+                Format: ${deviceInfo.format.toUpperCase()}<br>
+                ${currentFormat ? `${currentFormat.width}x${currentFormat.height}` : ''}
+            `;
+            
+            return deviceInfo;
+        }
+        
+        function updateFormat(format) {
+            deviceInfo.format = format;
+            currentFormat = formatConfigs[format];
+            
+            // Update UI
+            document.querySelectorAll('.format-button').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            document.querySelector(`[data-format="${format}"]`)?.classList.add('active');
+            
+            // Update device info display
+            document.getElementById('device-info').innerHTML = `
+                Device: ${deviceInfo.os}<br>
+                Format: ${format.toUpperCase()}<br>
+                ${currentFormat.width}x${currentFormat.height}
+            `;
+            
+            // Recreate scene with new dimensions
+            if (scene) {
+                recreateScene();
+            }
+        }
+        
+        function recreateScene() {
+            const config = currentFormat;
+            
+            // Update camera
+            camera.aspect = config.aspectRatio;
+            camera.position.z = config.cameraZ;
+            camera.updateProjectionMatrix();
+            
+            // Update background plane - keep at format dimensions for proper canvas output
+            if (backgroundPlane) {
+                scene.remove(backgroundPlane);
+                const backgroundGeometry = new THREE.PlaneGeometry(config.planeWidth, config.planeHeight);
+                const backgroundMaterial = backgroundPlane.material;
+                
+                // Recalculate texture cropping if camera is active
+                if (cameraTexture && cameraVideo.videoWidth && cameraVideo.videoHeight) {
+                    const cameraAspectRatio = cameraVideo.videoWidth / cameraVideo.videoHeight;
+                    const formatAspect = config.planeWidth / config.planeHeight;
+                    
+                    console.log(`Format switched - recalculating crop`);
+                    console.log(`Camera: ${cameraVideo.videoWidth}x${cameraVideo.videoHeight} (aspect: ${cameraAspectRatio.toFixed(2)})`);
+                    console.log(`New format: ${config.planeWidth}x${config.planeHeight} (aspect: ${formatAspect.toFixed(2)})`);
+                    
+                    // Reset texture to default
+                    cameraTexture.repeat.set(1, 1);
+                    cameraTexture.offset.set(0, 0);
+                    
+                    // Apply new cropping
+                    if (cameraAspectRatio > formatAspect) {
+                        // Camera is wider than format - crop sides
+                        const scaleX = formatAspect / cameraAspectRatio;
+                        cameraTexture.repeat.set(scaleX, 1);
+                        cameraTexture.offset.x = (1 - scaleX) / 2;
+                        console.log(`Camera wider: crop sides (repeat X: ${scaleX.toFixed(2)})`);
+                    } else if (cameraAspectRatio < formatAspect) {
+                        // Camera is taller than format - crop top/bottom
+                        const scaleY = cameraAspectRatio / formatAspect;
+                        cameraTexture.repeat.set(1, scaleY);
+                        cameraTexture.offset.y = (1 - scaleY) / 2;
+                        console.log(`Camera taller: crop top/bottom (repeat Y: ${scaleY.toFixed(2)})`);
+                    }
+                    cameraTexture.needsUpdate = true;
+                }
+                
+                backgroundPlane = new THREE.Mesh(backgroundGeometry, backgroundMaterial);
+                backgroundPlane.position.z = -2;
+                scene.add(backgroundPlane);
+            }
+            
+            // Update video plane
+            if (videoPlane) {
+                scene.remove(videoPlane);
+                const videoGeometry = new THREE.PlaneGeometry(config.videoPlaneWidth, config.videoPlaneHeight);
+                const videoMaterial = videoPlane.material;
+                videoPlane = new THREE.Mesh(videoGeometry, videoMaterial);
+                videoPlane.position.set(config.videoPlaneX, 0, 0);
+                scene.add(videoPlane);
+            }
+            
+            // Update model position
+            if (currentModel) {
+                currentModel.position.set(config.modelX, config.modelY, 1);
+                currentModel.scale.set(config.modelScale, config.modelScale, config.modelScale);
+            }
+            
+            // Update renderer
+            updateRendererSize();
+        }
+        
+        function updateRendererSize() {
+            const config = currentFormat;
+            const container = document.getElementById('canvas-container');
+            
+            let width = 1000 ;
+            let height = 2000;
+            
+            // Scale to fit window
+            const windowAspect = window.innerWidth / window.innerHeight;
+            const formatAspect = config.aspectRatio;
+            
+            if (windowAspect > formatAspect) {
+                // Window is wider
+                height = Math.min(window.innerHeight * 1.2, height);
+                width = height * formatAspect;
+            } else {
+                // Window is taller
+                width = Math.min(window.innerWidth * 1, width);
+                height = width / formatAspect;
+            }
+            
+            renderer.setSize(width, height);
+            container.style.width = width + 'px';
+            container.style.height = height + 'px';
+        }
+        
+        function init() {
+            // Detect device and set format
+            detectDevice();
+            currentFormat = formatConfigs[deviceInfo.format];
+            
+            // Get reference to camera video element
+            cameraVideo = document.getElementById('camera-video');
+            
+            // Create scene
+            scene = new THREE.Scene();
+            
+            // Create camera with device-specific settings
+            const config = currentFormat;
+            camera = new THREE.PerspectiveCamera(75, config.aspectRatio, 0.1, 1000);
+            camera.position.z = config.cameraZ;
+            
+            // Create renderer
+            renderer = new THREE.WebGLRenderer({ 
+                preserveDrawingBuffer: true,
+                alpha: true,
+                antialias: true
+            });
+            renderer.setClearColor(0x000000, 0);
+            document.getElementById('canvas-container').appendChild(renderer.domElement);
+            
+            // Create background plane for camera
+            const backgroundGeometry = new THREE.PlaneGeometry(config.planeWidth, config.planeHeight);
+            const backgroundMaterial = new THREE.MeshBasicMaterial({ 
+                color: 0xffffff,
+                transparent: true,
+                opacity: 0
+            });
+            backgroundPlane = new THREE.Mesh(backgroundGeometry, backgroundMaterial);
+            backgroundPlane.position.z = -2;
+            scene.add(backgroundPlane);
+            
+            // Create video plane with transparent material
+            const videoGeometry = new THREE.PlaneGeometry(config.videoPlaneWidth, config.videoPlaneHeight);
+            const videoMaterial = new THREE.MeshBasicMaterial({ 
+                color: 0xffffff, 
+                transparent: true, 
+                opacity: 0,
+                alphaTest: 0.1
+            });
+            videoPlane = new THREE.Mesh(videoGeometry, videoMaterial);
+            videoPlane.position.set(config.videoPlaneX, 0, 0);
+            scene.add(videoPlane);
+            
+            // Add lighting
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+            scene.add(ambientLight);
+            
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            directionalLight.position.set(5, 5, 5);
+            directionalLight.castShadow = true;
+            scene.add(directionalLight);
+            
+            // Initialize GLTF loader and clock
+            gltfLoader = new THREE.GLTFLoader();
+            clock = new THREE.Clock();
+            
+            // Set up event listeners
+            setupEventListeners();
+            
+            // Update renderer size
+            updateRendererSize();
+            
+            // Start render loop
+            animate();
+            
+            // Update button for active format
+            if (deviceInfo.isDesktop) {
+                document.querySelector(`[data-format="${deviceInfo.format}"]`).classList.add('active');
+            }
+            
+            updateStatus(`Initialized for ${deviceInfo.os} in ${deviceInfo.format} mode. Click "Start Camera" to begin.`);
+        }
+        
+        function setupEventListeners() {
+            document.getElementById('startCamera').addEventListener('click', startCamera);
+            document.getElementById('stopCamera').addEventListener('click', stopCamera);
+            document.getElementById('videoSelect').addEventListener('change', onVideoSelect);
+            document.getElementById('playVideo').addEventListener('click', playVideo);
+            document.getElementById('stopVideo').addEventListener('click', stopVideo);
+            document.getElementById('modelSelect').addEventListener('change', onModelSelect);
+            document.getElementById('loadModel').addEventListener('click', loadModel);
+            document.getElementById('removeModel').addEventListener('click', removeModel);
+            document.getElementById('takePhoto').addEventListener('click', takePhoto);
+            document.getElementById('recordVideo').addEventListener('click', recordVideo);
+            document.getElementById('stopRecording').addEventListener('click', stopRecording);
+            
+            // Format selector buttons
+            document.querySelectorAll('.format-button').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    updateFormat(e.target.dataset.format);
+                });
+            });
+            
+            window.addEventListener('resize', onWindowResize);
+        }
+        
+        async function startCamera() {
+            try {
+                const config = currentFormat;
+                
+                // Request camera access with format-specific constraints
+                const constraints = {
+                    video: {
+                        facingMode: deviceInfo.isMobile ? 'user' : 'environment',
+                        width: { ideal: config.width },
+                        height: { ideal: config.height },
+                        aspectRatio: { ideal: config.aspectRatio }
+                    },
+                    audio: false
+                };
+                
+                // Try with constraints first, fallback to basic
+                try {
+                    cameraStream = await navigator.mediaDevices.getUserMedia(constraints);
+                } catch (e) {
+                    cameraStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+                }
+                
+                // Set the stream to the video element
+                cameraVideo.srcObject = cameraStream;
+                
+                cameraVideo.onloadedmetadata = () => {
+                    // Get actual camera aspect ratio for proper cropping
+                    const cameraAspectRatio = cameraVideo.videoWidth / cameraVideo.videoHeight;
+                    const formatAspect = config.planeWidth / config.planeHeight;
+                    
+                    console.log(`Camera: ${cameraVideo.videoWidth}x${cameraVideo.videoHeight} (aspect: ${cameraAspectRatio.toFixed(2)})`);
+                    console.log(`Format: ${config.planeWidth}x${config.planeHeight} (aspect: ${formatAspect.toFixed(2)})`);
+                    
+                    // Remove old plane if exists
+                    if (backgroundPlane) {
+                        scene.remove(backgroundPlane);
+                    }
+                    
+                    // Keep plane at format dimensions (for proper canvas output)
+                    const backgroundGeometry = new THREE.PlaneGeometry(config.planeWidth, config.planeHeight);
+                    
+                    // Create texture
+                    cameraTexture = new THREE.VideoTexture(cameraVideo);
+                    cameraTexture.minFilter = THREE.LinearFilter;
+                    cameraTexture.magFilter = THREE.LinearFilter;
+                    cameraTexture.format = THREE.RGBFormat;
+                    
+                    // Apply texture cropping using repeat and offset
+                    // This makes the texture "cover" the plane (like CSS background-size: cover)
+                    if (cameraAspectRatio > formatAspect) {
+                        // Camera is wider than format - crop sides
+                        const scaleX = formatAspect / cameraAspectRatio;
+                        cameraTexture.repeat.set(scaleX, 1);
+                        cameraTexture.offset.x = (1 - scaleX) / 2;
+                        console.log(`Camera wider: crop sides (repeat X: ${scaleX.toFixed(2)})`);
+                    } else if (cameraAspectRatio < formatAspect) {
+                        // Camera is taller than format - crop top/bottom
+                        const scaleY = cameraAspectRatio / formatAspect;
+                        cameraTexture.repeat.set(1, scaleY);
+                        cameraTexture.offset.y = (1 - scaleY) / 2;
+                        console.log(`Camera taller: crop top/bottom (repeat Y: ${scaleY.toFixed(2)})`);
+                    }
+                    
+                    // Create material with texture
+                    const backgroundMaterial = new THREE.MeshBasicMaterial({
+                        map: cameraTexture,
+                        side: THREE.DoubleSide
+                    });
+                    
+                    // Create and add mesh
+                    backgroundPlane = new THREE.Mesh(backgroundGeometry, backgroundMaterial);
+                    backgroundPlane.position.z = -2;
+                    scene.add(backgroundPlane);
+                    backgroundPlane.material.needsUpdate = true;
+                    
+                    updateStatus('Camera started successfully');
+                    document.getElementById('startCamera').disabled = true;
+                    document.getElementById('stopCamera').disabled = false;
+                };
+                
+                cameraVideo.onerror = (e) => {
+                    console.error('Video playback error:', e);
+                    updateStatus('Error during video playback');
+                };
+                
+            } catch (error) {
+                console.error('Error accessing camera:', error);
+                updateStatus('Error: Could not access camera. Please check permissions.');
+            }
+        }
+        
+        function stopCamera() {
+            if (cameraStream) {
+                cameraStream.getTracks().forEach(track => track.stop());
+                cameraStream = null;
+                
+                cameraVideo.srcObject = null;
+                
+                if (cameraTexture) {
+                    cameraTexture.dispose();
+                    cameraTexture = null;
+                }
+                
+                backgroundPlane.material = new THREE.MeshBasicMaterial({
+                    color: 0xffffff,
+                    transparent: true,
+                    opacity: 0
+                });
+                backgroundPlane.material.needsUpdate = true;
+                
+                updateStatus('Camera stopped');
+                document.getElementById('startCamera').disabled = false;
+                document.getElementById('stopCamera').disabled = true;
+            }
+        }
+        
+        function onVideoSelect() {
+            const selectedVideo = document.getElementById('videoSelect').value;
+            if (selectedVideo) {
+                document.getElementById('playVideo').disabled = false;
+                updateStatus(`Selected: ${selectedVideo}`);
+            } else {
+                document.getElementById('playVideo').disabled = true;
+                document.getElementById('stopVideo').disabled = true;
+            }
+        }
+        
+        function playVideo() {
+            const selectedVideo = document.getElementById('videoSelect').value;
+            if (!selectedVideo) return;
+            
+            if (videoElement) {
+                videoElement.pause();
+            }
+            
+            videoElement = document.createElement('video');
+            videoElement.src = videoUrls[selectedVideo];
+            videoElement.crossOrigin = 'anonymous';
+            videoElement.loop = true;
+            videoElement.muted = true;
+            videoElement.autoplay = true;
+            videoElement.playsInline = true;
+            
+            videoElement.addEventListener('canplay', () => {
+                videoTexture = new THREE.VideoTexture(videoElement);
+                videoTexture.minFilter = THREE.LinearFilter;
+                videoTexture.magFilter = THREE.LinearFilter;
+                videoTexture.format = THREE.RGBAFormat;
+                
+                videoPlane.material = new THREE.MeshBasicMaterial({
+                    map: videoTexture,
+                    transparent: true,
+                    alphaTest: 0.01,
+                    side: THREE.DoubleSide
+                });
+                videoPlane.material.needsUpdate = true;
+                
+                videoElement.play();
+                isVideoPlaying = true;
+                
+                updateStatus(`Playing WebM: ${selectedVideo}`);
+                document.getElementById('playVideo').disabled = true;
+                document.getElementById('stopVideo').disabled = false;
+            });
+            
+            videoElement.addEventListener('error', (e) => {
+                console.error('Video error:', e);
+                updateStatus('Error: Could not load video');
+                document.getElementById('playVideo').disabled = false;
+            });
+        }
+        
+        function stopVideo() {
+            if (videoElement) {
+                videoElement.pause();
+                videoElement = null;
+            }
+            
+            if (videoTexture) {
+                videoTexture.dispose();
+                videoTexture = null;
+            }
+            
+            videoPlane.material = new THREE.MeshBasicMaterial({
+                color: 0xffffff,
+                transparent: true,
+                opacity: 0
+            });
+            videoPlane.material.needsUpdate = true;
+            
+            isVideoPlaying = false;
+            updateStatus('Video stopped');
+            document.getElementById('playVideo').disabled = false;
+            document.getElementById('stopVideo').disabled = true;
+        }
+        
+        function onModelSelect() {
+            const selectedModel = document.getElementById('modelSelect').value;
+            if (selectedModel) {
+                document.getElementById('loadModel').disabled = false;
+                updateStatus(`Selected: ${selectedModel}`);
+            } else {
+                document.getElementById('loadModel').disabled = true;
+            }
+        }
+        
+        function loadModel() {
+            const selectedModel = document.getElementById('modelSelect').value;
+            if (!selectedModel) return;
+            
+            updateStatus(`Loading 3D model: ${selectedModel}...`);
+            
+            if (currentModel) {
+                scene.remove(currentModel);
+                if (animationMixer) {
+                    animationMixer.stopAllAction();
+                    animationMixer = null;
+                }
+                animationActions = [];
+            }
+            
+            gltfLoader.load(
+                modelUrls[selectedModel],
+                (gltf) => {
+                    currentModel = gltf.scene;
+                    
+                    const config = currentFormat;
+                    currentModel.position.set(config.modelX, config.modelY, 1);
+                    currentModel.scale.set(config.modelScale, config.modelScale, config.modelScale);
+                    
+                    scene.add(currentModel);
+                    
+                    if (gltf.animations && gltf.animations.length > 0) {
+                        animationMixer = new THREE.AnimationMixer(currentModel);
+                        
+                        gltf.animations.forEach((clip) => {
+                            const action = animationMixer.clipAction(clip);
+                            animationActions.push(action);
+                            action.play();
+                        });
+                        
+                        updateStatus(`3D model loaded with ${gltf.animations.length} animations`);
+                    } else {
+                        updateStatus('3D model loaded (no animations)');
+                    }
+                    
+                    document.getElementById('loadModel').disabled = true;
+                    document.getElementById('removeModel').disabled = false;
+                },
+                (progress) => {
+                    const percent = Math.round((progress.loaded / progress.total) * 100);
+                    updateStatus(`Loading model... ${percent}%`);
+                },
+                (error) => {
+                    console.error('Error loading model:', error);
+                    updateStatus('Error: Could not load 3D model');
+                }
+            );
+        }
+        
+        function removeModel() {
+            if (currentModel) {
+                scene.remove(currentModel);
+                currentModel = null;
+                
+                if (animationMixer) {
+                    animationMixer.stopAllAction();
+                    animationMixer = null;
+                }
+                animationActions = [];
+                
+                updateStatus('3D model removed');
+                
+                document.getElementById('loadModel').disabled = false;
+                document.getElementById('removeModel').disabled = true;
+            }
+        }
+        
+        function takePhoto() {
+            if (isCounting) return;
+            
+            startCountdown(() => {
+                renderer.render(scene, camera);
+                
+                const canvas = renderer.domElement;
+                const dataURL = canvas.toDataURL('image/png');
+                
+                const preview = document.getElementById('photo-preview');
+                preview.src = dataURL;
+                preview.style.display = 'block';
+                
+                const link = document.createElement('a');
+                link.download = `photo-${deviceInfo.format}-${Date.now()}.png`;
+                link.href = dataURL;
+                link.click();
+                
+                updateStatus(`Photo captured in ${deviceInfo.format} format (${currentFormat.width}x${currentFormat.height})`);
+                
+                setTimeout(() => {
+                    preview.style.display = 'none';
+                }, 3000);
+            });
+        }
+        
+        function recordVideo() {
+            if (isRecording || isCounting) return;
+            
+            startCountdown(() => {
+                startVideoRecording();
+            });
+        }
+        
+        function startVideoRecording() {
+            try {
+                const canvas = renderer.domElement;
+                const stream = canvas.captureStream(30);
+                
+                const options = {
+                    mimeType: 'video/webm;codecs=vp9',
+                    videoBitsPerSecond: 2500000
+                };
+                
+                if (!MediaRecorder.isTypeSupported(options.mimeType)) {
+                    options.mimeType = 'video/webm;codecs=vp8';
+                    if (!MediaRecorder.isTypeSupported(options.mimeType)) {
+                        options.mimeType = 'video/webm';
+                    }
+                }
+                
+                mediaRecorder = new MediaRecorder(stream, options);
+                recordedChunks = [];
+                
+                mediaRecorder.ondataavailable = (event) => {
+                    if (event.data.size > 0) {
+                        recordedChunks.push(event.data);
+                    }
+                };
+                
+                mediaRecorder.onstop = () => {
+                    const blob = new Blob(recordedChunks, { type: 'video/webm' });
+                    const url = URL.createObjectURL(blob);
+                    
+                    const videoPreview = document.getElementById('video-preview');
+                    videoPreview.src = url;
+                    videoPreview.style.display = 'block';
+                    
+                    const link = document.createElement('a');
+                    link.download = `video-${deviceInfo.format}-${Date.now()}.webm`;
+                    link.href = url;
+                    link.click();
+                    
+                    updateStatus(`10-second video captured in ${deviceInfo.format} format (${currentFormat.width}x${currentFormat.height})`);
+                    
+                    setTimeout(() => {
+                        videoPreview.style.display = 'none';
+                        URL.revokeObjectURL(url);
+                    }, 5000);
+                    
+                    document.getElementById('recordVideo').disabled = false;
+                    document.getElementById('stopRecording').style.display = 'none';
+                    document.getElementById('recordVideo').style.display = 'inline-block';
+                    isRecording = false;
+                };
+                
+                mediaRecorder.start(100);
+                isRecording = true;
+                
+                document.getElementById('recordVideo').disabled = true;
+                document.getElementById('stopRecording').disabled = false;
+                document.getElementById('stopRecording').style.display = 'inline-block';
+                document.getElementById('recordVideo').style.display = 'none';
+                
+                const indicator = document.getElementById('recording-indicator');
+                const countdownElement = document.getElementById('countdown');
+                indicator.style.display = 'block';
+                
+                let timeLeft = 10;
+                countdownElement.textContent = timeLeft;
+                
+                countdownTimer = setInterval(() => {
+                    timeLeft--;
+                    countdownElement.textContent = timeLeft;
+                    if (timeLeft <= 0) {
+                        clearInterval(countdownTimer);
+                    }
+                }, 1000);
+                
+                recordingTimer = setTimeout(() => {
+                    stopRecording();
+                }, 10000);
+                
+                updateStatus('Recording 10-second video...');
+                
+            } catch (error) {
+                console.error('Error starting video recording:', error);
+                updateStatus('Error: Could not start video recording');
+            }
+        }
+        
+        function stopRecording() {
+            if (!isRecording) return;
+            
+            if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+                mediaRecorder.stop();
+            }
+            
+            if (recordingTimer) {
+                clearTimeout(recordingTimer);
+                recordingTimer = null;
+            }
+            
+            if (countdownTimer) {
+                clearInterval(countdownTimer);
+                countdownTimer = null;
+            }
+            
+            document.getElementById('recording-indicator').style.display = 'none';
+            
+            updateStatus('Recording stopped');
+        }
+        
+        function startCountdown(callback) {
+            if (isCounting) return;
+            
+            isCounting = true;
+            const countdownOverlay = document.getElementById('countdown-overlay');
+            countdownOverlay.style.display = 'block';
+            
+            let count = 3;
+            countdownOverlay.textContent = count;
+            
+            captureCountdownTimer = setInterval(() => {
+                count--;
+                if (count > 0) {
+                    countdownOverlay.textContent = count;
+                    countdownOverlay.style.animation = 'none';
+                    setTimeout(() => {
+                        countdownOverlay.style.animation = 'countdownPulse 1s ease-in-out';
+                    }, 10);
+                } else {
+                    countdownOverlay.textContent = 'GO!';
+                    setTimeout(() => {
+                        countdownOverlay.style.display = 'none';
+                        isCounting = false;
+                        clearInterval(captureCountdownTimer);
+                        callback();
+                    }, 500);
+                }
+            }, 1000);
+            
+            updateStatus('Get ready... 3, 2, 1...');
+        }
+        
+        function animate() {
+            requestAnimationFrame(animate);
+            
+            const deltaTime = clock.getDelta();
+            
+            if (animationMixer) {
+                animationMixer.update(deltaTime);
+            }
+            
+            if (videoTexture && isVideoPlaying) {
+                videoTexture.needsUpdate = true;
+            }
+            
+            if (cameraTexture) {
+                cameraTexture.needsUpdate = true;
+            }
+            
+            if (videoPlane.material.opacity > 0) {
+                videoPlane.rotation.y = Math.sin(Date.now() * 0.001) * 0.1;
+            }
+            
+            if (currentModel) {
+                currentModel.rotation.y += 0.005;
+            }
+            
+            renderer.render(scene, camera);
+        }
+        
+        function onWindowResize() {
+            updateRendererSize();
+        }
+        
+        function updateStatus(message) {
+            document.getElementById('status').textContent = message;
+        }
+        
+        // Initialize the app
+        init();
+    </script>
+</body>
+</html>
